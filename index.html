@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>英文單字卡</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #fff; --text: #1d2330; --muted: #667085; --line: #d9dde4;
+    --accent: #2f6fde; --ok: #16a34a; --ok-bg: #dcfce7; --bad: #dc2626; --bad-bg: #fee2e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --surface: #1c212b; --text: #e7eaf0; --muted: #98a2b3; --line: #2e3542;
+      --accent: #6b9cff; --ok: #4ade80; --ok-bg: #13321f; --bad: #f87171; --bad-bg: #3a1717;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow-x: hidden; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px; min-height: 100dvh; display: flex; flex-direction: column; }
+  section { display: flex; flex-direction: column; gap: 12px; }
+  section[hidden] { display: none; }
+  h1, h2 { margin: 8px 0; }
+  button { font: inherit; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  input[type=number] { font: inherit; width: 6em; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .muted { color: var(--muted); }
+  #msg:empty { display: none; }
+  #msg { padding: 8px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
+
+  #study { flex: 1; }
+  .top { display: flex; justify-content: space-between; align-items: center; }
+  #card {
+    flex: 1; min-height: 50vh; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px;
+    padding: 24px; border-radius: 18px; border: 2px solid var(--line); background: var(--surface);
+    touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .2s;
+  }
+  #card span { display: block; }
+  #card [hidden] { display: none; }
+  #card[data-dir=right] { border-color: var(--ok); background: var(--ok-bg); }
+  #card[data-dir=left] { border-color: var(--bad); background: var(--bad-bg); }
+  #front { font-size: 1.8rem; font-weight: 600; text-align: center; }
+  #back { text-align: center; }
+  #zh { font-size: 1.5rem; }
+  #note { margin-top: 12px; color: var(--muted); white-space: pre-line; }
+  .answer { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .answer button { padding: 14px; font-size: 1.1rem; }
+  #no { color: var(--bad); border-color: var(--bad); }
+  #yes { color: var(--ok); border-color: var(--ok); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th, td.num { white-space: nowrap; }
+  td.num { text-align: right; }
+</style>
+</head>
+<body>
+<main>
+  <section id="home">
+    <h1>英文單字卡</h1>
+    <p id="wordCount" class="muted"></p>
+    <div class="row">
+      <button id="pickWords">匯入單字檔</button>
+      <input type="file" id="wordFile" accept=".json,application/json" hidden>
+    </div>
+    <p id="msg" role="status"></p>
+    <fieldset>
+      <legend>範圍（編號）</legend>
+      <label>從 <input type="number" id="from" min="1"></label>
+      <label>到 <input type="number" id="to" min="1"></label>
+    </fieldset>
+    <fieldset>
+      <legend>模式</legend>
+      <label><input type="radio" name="mode" value="all" checked> 全部</label>
+      <label><input type="radio" name="mode" value="wrong"> 只練錯題（錯題庫 <span id="wrongCount">0</span> 題）</label>
+    </fieldset>
+    <button id="start" class="primary">開始</button>
+    <div class="row">
+      <button id="showStats">統計</button>
+      <button id="exportStats">匯出進度</button>
+      <button id="pickStats">匯入進度</button>
+      <input type="file" id="statsFile" accept=".json,application/json" hidden>
+    </div>
+  </section>
+
+  <section id="study" hidden>
+    <div class="top">
+      <button class="home">⚙ 設定</button>
+      <span id="progress" class="muted"></span>
+    </div>
+    <button id="card" type="button" aria-label="點擊翻面">
+      <span id="front"></span>
+      <span id="back" hidden><span id="zh"></span><span id="note"></span></span>
+    </button>
+    <p class="muted" style="text-align:center;margin:0">點卡片翻面 · 左滑答錯 · 右滑答對（鍵盤 ← →）</p>
+    <div class="answer">
+      <button id="no">✗ 答錯</button>
+      <button id="yes">✓ 答對</button>
+    </div>
+  </section>
+
+  <section id="done" hidden>
+    <h2>本輪完成</h2>
+    <p id="result"></p>
+    <button id="again" class="primary">再來一輪</button>
+    <button class="home">設定</button>
+  </section>
+
+  <section id="stats" hidden>
+    <h2>統計</h2>
+    <p id="summary"></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>英文</th><th>中文</th><th>對</th><th>錯</th><th>錯題庫</th></tr></thead>
+        <tbody id="statRows"></tbody>
+      </table>
+    </div>
+    <button class="home primary">回首頁</button>
+  </section>
+</main>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
