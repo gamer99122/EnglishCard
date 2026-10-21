@@ -1,11 +1,20 @@
 const $ = s => document.querySelector(s);
 
-const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+// 同帳號的 GitHub Pages 共用 localStorage，加前綴避免和其他專案的 key 撞名
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem('englishcard.' + k)) ?? d; } catch { return d; } };
 const save = (k, v) => {
-  try { localStorage.setItem(k, JSON.stringify(v)); }
+  try { localStorage.setItem('englishcard.' + k, JSON.stringify(v)); }
   catch { alertMsg('無法儲存：瀏覽器儲存空間無法使用（無痕模式？）'); }
 };
 const alertMsg = t => { $('#msg').textContent = t; };
+
+// shortcut: 把舊版沒有前綴的資料搬一次（舊 key 留著不刪），所有裝置都開過新版後可以刪掉這段
+try {
+  for (const k of ['words', 'stats', 'prefs']) {
+    const old = localStorage.getItem(k);
+    if (old !== null && localStorage.getItem('englishcard.' + k) === null) localStorage.setItem('englishcard.' + k, old);
+  }
+} catch {}
 
 let words = load('words', []);
 let stats = load('stats', {});
