@@ -18,7 +18,11 @@ try {
 
 let words = load('words', []);
 let stats = load('stats', {});
-let queue = [], i = 0, nRight = 0, nWrong = 0;
+// n0 = 本輪原始題數；索引 >= n0 的是答錯後排到最後重練的卡，不寫入紀錄
+let queue = [], i = 0, n0 = 0, nRight = 0, nWrong = 0, undoStack = [];
+
+// 本地時間的日序號（1970 起第幾天），過了本地午夜才換日
+const today = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
 
 function show(id) {
   for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== id;
@@ -29,7 +33,9 @@ function refreshHome() {
   $('#wordCount').textContent = words.length
     ? `已載入 ${words.length} 筆單字（編號 ${words[0].id}–${words.at(-1).id}）`
     : '還沒有單字，請先匯入單字檔（JSON）';
-  $('#wrongCount').textContent = words.filter(w => inWrongBank(stats[w.id])).length;
+  const from = +$('#from').value, to = +$('#to').value;
+  $('#wrongCount').textContent = pickCards(words, stats, from, to, 'wrong').length;
+  $('#dueCount').textContent = pickCards(words, stats, from, to, 'due', today()).length;
 }
 
 function fillRange(from, to) {
@@ -48,11 +54,13 @@ function shuffle(a) {
 function start() {
   const mode = document.querySelector('input[name=mode]:checked').value;
   const from = +$('#from').value, to = +$('#to').value;
-  queue = shuffle(pickCards(words, stats, from, to, mode === 'wrong'));
-  if (!queue.length) return alertMsg(mode === 'wrong' ? '這個範圍內沒有錯題' : '這個範圍內沒有單字');
+  queue = shuffle(pickCards(words, stats, from, to, mode, today()));
+  if (!queue.length) return alertMsg({ wrong: '這個範圍內沒有錯題', due: '這個範圍今天沒有要練的題目' }[mode] ?? '這個範圍內沒有單字');
   save('prefs', { from, to, mode });
   alertMsg('');
   i = nRight = nWrong = 0;
+  n0 = queue.length;
+  undoStack = [];
   show('study');
   showCard();
 }
@@ -63,16 +71,46 @@ function showCard() {
   $('#zh').textContent = w.zh;
   $('#note').textContent = w.note ?? '';
   $('#back').hidden = true;
-  $('#progress').textContent = `${i + 1} / ${queue.length}`;
+  $('#progress').textContent = `${i + 1} / ${queue.length}${i >= n0 ? '（重練）' : ''}`;
+  for (const b of document.querySelectorAll('.undo')) b.disabled = !undoStack.length;
 }
 
 function answer(ok) {
-  record(stats, queue[i].id, ok);
-  save('stats', stats);
-  ok ? nRight++ : nWrong++;
+  const w = queue[i], first = i < n0;
+  undoStack.push({ id: w.id, prev: stats[w.id], first, ok });
+  if (first) {
+    record(stats, w.id, ok, today());
+    save('stats', stats);
+    ok ? nRight++ : nWrong++;
+  }
+  if (!ok) queue.push(w);
   if (++i < queue.length) return showCard();
-  $('#result').textContent = `答對 ${nRight} 題、答錯 ${nWrong} 題（正確率 ${Math.round(nRight / queue.length * 100)}%）`;
+  $('#result').textContent = `共 ${n0} 題：第一次就答對 ${nRight} 題、答錯 ${nWrong} 題（正確率 ${Math.round(nRight / n0 * 100)}%），答錯的都已在本輪重練到答對。`;
+  for (const b of document.querySelectorAll('.undo')) b.disabled = false;
   show('done');
+}
+
+// record 每次都換成新物件，所以 prev 就是作答前的快照
+function undo() {
+  if (flying || !undoStack.length) return;
+  const h = undoStack.pop();
+  i--;
+  if (!h.ok) queue.pop();
+  if (h.first) {
+    if (h.prev) stats[h.id] = h.prev; else delete stats[h.id];
+    save('stats', stats);
+    h.ok ? nRight-- : nWrong--;
+  }
+  show('study');
+  showCard();
+}
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  speechSynthesis.speak(u);
 }
 
 function showStats() {
@@ -140,7 +178,11 @@ const release = () => {
 };
 card.addEventListener('pointerup', release);
 card.addEventListener('pointercancel', () => { dx = 0; release(); });
-card.addEventListener('click', () => { if (!dragged) $('#back').hidden = !$('#back').hidden; });
+card.addEventListener('click', () => {
+  if (dragged) return;
+  $('#back').hidden = !$('#back').hidden;
+  if (!$('#back').hidden) speak(queue[i].en);
+});
 
 document.addEventListener('keydown', e => {
   if ($('#study').hidden) return;
@@ -152,6 +194,10 @@ $('#no').onclick = () => fly(false);
 $('#yes').onclick = () => fly(true);
 $('#start').onclick = start;
 $('#again').onclick = start;
+for (const b of document.querySelectorAll('.undo')) b.onclick = undo;
+$('#speak').hidden = !('speechSynthesis' in window);
+$('#speak').onclick = () => speak(queue[i].en);
+$('#from').oninput = $('#to').oninput = refreshHome;
 $('#showStats').onclick = showStats;
 for (const b of document.querySelectorAll('.home')) b.onclick = () => show('home');
 
@@ -193,9 +239,7 @@ $('#statsFile').onchange = async e => {
 
 // 打開就用上次的範圍和模式直接出卡片；還沒匯入單字或範圍內沒題目時停在設定頁
 const prefs = load('prefs', {});
-if (prefs.mode === 'wrong') document.querySelector('input[name=mode][value=wrong]').checked = true;
+if (['wrong', 'due'].includes(prefs.mode)) document.querySelector(`input[name=mode][value=${prefs.mode}]`).checked = true;
+if (words.length) fillRange(prefs.from ?? words[0].id, prefs.to ?? words.at(-1).id);
 show('home');
-if (words.length) {
-  fillRange(prefs.from ?? words[0].id, prefs.to ?? words.at(-1).id);
-  start();
-}
+if (words.length) start();

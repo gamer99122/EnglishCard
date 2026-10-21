@@ -22,6 +22,7 @@
   section[hidden] { display: none; }
   h1, h2 { margin: 8px 0; }
   button { font: inherit; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   input[type=number] { font: inherit; width: 6em; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
   fieldset { border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
@@ -73,9 +74,10 @@
       <label>到 <input type="number" id="to" min="1"></label>
     </fieldset>
     <fieldset>
-      <legend>模式</legend>
+      <legend>模式（題數只算範圍內）</legend>
       <label><input type="radio" name="mode" value="all" checked> 全部</label>
-      <label><input type="radio" name="mode" value="wrong"> 只練錯題（錯題庫 <span id="wrongCount">0</span> 題）</label>
+      <label><input type="radio" name="mode" value="due"> 今日該練（到期＋新字 <span id="dueCount">0</span> 題）</label>
+      <label><input type="radio" name="mode" value="wrong"> 只練錯題（<span id="wrongCount">0</span> 題）</label>
     </fieldset>
     <button id="start" class="primary">開始</button>
     <div class="row">
@@ -88,7 +90,11 @@
 
   <section id="study" hidden>
     <div class="top">
-      <button class="home">⚙ 設定</button>
+      <div class="row">
+        <button class="home">⚙ 設定</button>
+        <button class="undo">↶ 撤銷</button>
+        <button id="speak" aria-label="唸出英文">🔊</button>
+      </div>
       <span id="progress" class="muted"></span>
     </div>
     <button id="card" type="button" aria-label="點擊翻面">
@@ -106,6 +112,7 @@
     <h2>本輪完成</h2>
     <p id="result"></p>
     <button id="again" class="primary">再來一輪</button>
+    <button class="undo">↶ 撤銷上一題</button>
     <button class="home">設定</button>
   </section>
 
